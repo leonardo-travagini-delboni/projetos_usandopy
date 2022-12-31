@@ -11,6 +11,9 @@ import pdb                                                                      
 import logging                                                                                                                   # Biblioteca para logging
 import os                                                                                                                        # Biblioteca para Sistema Operacional
 import time                                                                                                                      # Biblioteca para espera de tempo explicita
+import requests
+import scrapy
+import investpy as investpy
 
 # INPUTS INICIAIS:
 debug_mode = False
@@ -90,28 +93,67 @@ def get_all_b3_stock_companies():
     options.add_experimental_option("detach", True)                                                                              # Mantendo o driver aberto
     service = Service(ChromeDriverManager().install())                                                                           # Configurando o Service do Google Chrome
 
-    # Iniciando as Operacoes com o navegador:
-    driver = webdriver.Chrome(service=service, options=options)                                                                  # Inicializando o Driver conforme desejado
-    url_b3 = 'https://www.b3.com.br/pt_br/produtos-e-servicos/negociacao/renda-variavel/empresas-listadas.htm'                   # URL das empresas listadas na B3
-    driver.get(url_b3)                                                                                                           # Acessando a plataforma                                                                              
-    driver.maximize_window()                                                                                                     # Maximizando o navegador
-    driver.implicitly_wait(2.0)                                                                                                  # Espera temporal implicita
-    print('CHECKPOINT 1')
-    cookies_accept_xpath = '/html/body/div[2]/div[3]/div/div[1]/div/div[2]/div/button[3]'
-    driver.find_element('xpath', cookies_accept_xpath).click()
-    driver.implicitly_wait(2.0)                                                                                                  # Espera temporal implicita
-    print('CHECKPOINT 2')
-    driver.find_element(By.CSS_SELECTOR,"#accordionName > div > app-companies-home-filter-name > form > div > div:nth-child(4) > button").click()
-    time.sleep(5.0)                                                                                                  # Espera temporal implicita
-    print('CHECKPOINT 3')
+    # # Iniciando as Operacoes com o navegador:
+    # driver = webdriver.Chrome(service=service, options=options)                                                                  # Inicializando o Driver conforme desejado
+    # driver.maximize_window()                                                                                                     # Maximizando o navegador
+
+
+    # url_b3 = 'https://www.b3.com.br/pt_br/produtos-e-servicos/negociacao/renda-variavel/empresas-listadas.htm'                   # URL das empresas listadas na B3
+    # driver.get(url_b3)                                                                                                           # Acessando a plataforma                                                                              
+    # driver.maximize_window()                                                                                                     # Maximizando o navegador
+    # driver.implicitly_wait(2.0)                                                                                                  # Espera temporal implicita
+    # print('CHECKPOINT 1')
+    # cookies_accept_xpath = '/html/body/div[2]/div[3]/div/div[1]/div/div[2]/div/button[3]'
+    # driver.find_element('xpath', cookies_accept_xpath).click()
+    # driver.implicitly_wait(2.0)                                                                                                  # Espera temporal implicita
+    # print('CHECKPOINT 2')
+    # driver.find_element(By.CSS_SELECTOR,"#accordionName > div > app-companies-home-filter-name > form > div > div:nth-child(4) > button").click()
+    # time.sleep(5.0)                                                                                                  # Espera temporal implicita
+    # print('CHECKPOINT 3')
 
     # ELEMENT:
     # <button type="submit" aria-label="Buscar Todas" class="btn btn-light btn-block mt-3">Todos</button>
     # FULL XPATH:
     # /html/body/app-root/app-companies-home/div/div/div/div/div[1]/div[2]/div/app-companies-home-filter-name/form/div/div[4]/button
 
+    # url_fundamentus = 'https://www.fundamentus.com.br/detalhes.php?papel='
+
     # Retornando o dataframe e a lista de siglas
-    return True
+    lista_tickers = investpy.get_stocks_list("brazil")
+    print('lista_tickers:\n')
+    print(len(lista_tickers))
+
+    return lista_tickers
 
 # Executando o web scraping:
-get_all_b3_stock_companies()
+lista_tickers = investpy.get_stocks_list("brazil")
+vetor_deu_bom = []
+vetor_deu_ruim = []
+maximo = len(lista_tickers)
+contador = 0
+for element in lista_tickers:
+    contador += 1
+    print(f'{contador}: {element}')
+
+contador = 0
+contador_deu_bom = 0
+contador_deu_ruim = 0
+
+for element in lista_tickers:
+    try:
+        df = get_stock_prices(stock = element)
+        if df != df.empty:
+            contador += 1
+            vetor_deu_bom.append(element)
+            contador_deu_bom += 1
+            print(f'DEU BOM! {contador} de {maximo}. Contador_deu_bom = {contador_deu_bom} x contador_deu_ruim = {contador_deu_ruim}')
+        else:
+            contador += 1
+            vetor_deu_ruim.append(element)
+            contador_deu_ruim += 1
+            print(f'DEU RUIM! {contador} de {maximo}. Contador_deu_bom = {contador_deu_bom} x contador_deu_ruim = {contador_deu_ruim}')
+    except:
+        contador += 1
+        vetor_deu_ruim.append(element)
+        contador_deu_ruim += 1
+        print(f'DEU RUIM! {contador} de {maximo}. Contador_deu_bom = {contador_deu_bom} x contador_deu_ruim = {contador_deu_ruim}')
