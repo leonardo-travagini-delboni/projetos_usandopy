@@ -127,3 +127,16 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Dados pessoais:
+info_email.py
+
+# Dados de csv e xlsx:
+*.xlsx
+*.csv
+
+# Arquivos de logging:
+*.log
+
+# Arquivos de imagem:
+*.png
