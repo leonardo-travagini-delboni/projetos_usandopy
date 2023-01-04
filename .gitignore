@@ -129,7 +129,8 @@ dmypy.json
 .pyre/
 
 # Dados pessoais:
-info_email.py
+config.py
+bot_telegram.py
 
 # Dados de csv e xlsx:
 *.xlsx

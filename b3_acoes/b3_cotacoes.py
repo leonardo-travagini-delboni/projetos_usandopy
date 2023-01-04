@@ -12,23 +12,27 @@ import logging                                                                  
 import os                                                                                                                        # Biblioteca para Sistema Operacional
 import time                                                                                                                      # Biblioteca para espera de tempo explicita
 import requests                                                                                                                  # Biblioteca para request de arquivo JSON
-import scrapy                                                                                                                    # 
+import scrapy                                                                                                                    # Biblioteca para realização de Web Scraping
 import investpy as investpy                                                                                                      # 
-import matplotlib.pyplot as plt                                                                                                  # 
+import matplotlib.pyplot as plt                                                                                                  # Biblioteca para plotagem grafica
 from redmail import EmailSender                                                                                                  # Biblioteca para envio de email pelo Gmail
 from pathlib import Path                                                                                                         # Biblioteca para checagem e correcao de diretorio
 import speedtest                                                                                                                 # Biblioteca para checagem de conexao internet
+import argparse                                                                                                                  # Biblioteca Argparse para atribuiçao de paramteros
+from redmail import gmail                                                                                                        # Biblioteca para envio de email via Gmail
+import telebot                                                                                                                   # Importando a biblioteca do BOT Telegram 
 
-# Importando dados pessoais:
-from info_email import sender_email
-from info_email import receiver_email_list
-from info_email import sender_email_password
-from info_email import server
-from info_email import email_text
+
+# Importando dados pessoais para envio de email via Gmail:
+from config import sender_email                                                                                                 
+from config import receiver_email_list
+from config import sender_email_password
+from config import email_text
+from config import assinatura
 
 # INPUTS INICIAIS:
 debug_mode = False
-stock = 'BBAS3'
+stock = 'BBDC4'
 data_ini = '20100101'
 data_fim = None
 send_email = True
@@ -69,8 +73,8 @@ logging.info('Cotacoes B3 automatizadas diariamente. Desenvolvido por Leonardo T
 print('\nCotacoes B3 automatizadas diariamente.\nDesenvolvido por Leonardo Travagini Delboni\n')                               # Creditos do desenvolvedor
 
 # Checando a internet no momento da execucao do codigo:
-st = speedtest.Speedtest()
-download_speed = st.download()
+st = speedtest.Speedtest()                                                                                                     # Atribuindo o verificador de internet
+download_speed = st.download()                                                                                                    
 tries = 0
 while tries < 11:
     if download_speed <= 0:
@@ -110,15 +114,17 @@ def get_stock_prices(stock = 'PETR3',data_ini = '19000101', data_fim = None, sen
     last_data = last_data.replace('-','')                                                                                       # Retirando os caracteres especiais
 
     # Obtendo a data final maxima disponivel para aplicacao na API completa:
-    if data_fim == None or data_fim == 0 or data_fim == '':
-        data_fim = last_data
-        logging.debug('COMO NAO FOI INFORMADA, CONSIDEROU-SE A DATA FINAL COMO A ULTIMA DISPONIVEL PELA API!')
+    if data_fim == None or data_fim == 0 or data_fim == '':                                                                     # Checando a data limite da API do OKANEBOX
+        data_fim = last_data                                                                         
+        logging.info('COMO NAO FOI INFORMADA, CONSIDEROU-SE A DATA FINAL COMO A ULTIMA DISPONIVEL PELA API!')
+        print('COMO NAO FOI INFORMADA, CONSIDEROU-SE A DATA FINAL COMO A ULTIMA DISPONIVEL PELA API!')
     elif int(data_fim) > int(last_data):
         data_fim = last_data
-        logging.debug('COMO A DATA FINAL INSERIDA E MAIOR QUE A ULTIMA DISPONIVEL, CONSIDEROU-SE A ULTIMA DISPONIVEL PELA API!')
+        print('COMO A DATA FINAL INSERIDA E MAIOR QUE A ULTIMA DISPONIVEL, CONSIDEROU-SE A ULTIMA DISPONIVEL PELA API!')
+        logging.info('COMO A DATA FINAL INSERIDA E MAIOR QUE A ULTIMA DISPONIVEL, CONSIDEROU-SE A ULTIMA DISPONIVEL PELA API!')
 
     # Pelo API da OKANEBOX:
-    url = 'https://www.okanebox.com.br/api/acoes/hist/' + str(stock) + '/' + str(data_ini) + '/' + str(data_fim) + '/'
+    url = 'https://www.okanebox.com.br/api/acoes/hist/' + str(stock) + '/' + str(data_ini) + '/' + str(data_fim) + '/'          # Declarando o URL para executar o request da API
     response = urlopen(url)                                                                                                     # Fazendo request da url inserida
     data_json = json.loads(response.read().decode())                                                                            # Salvando os dados como leitura
     df = pd.DataFrame(data_json)                                                                                                # Convertendo o JSON para dataframe pandas e abrindo o dicionario interno
@@ -141,67 +147,73 @@ def get_stock_prices(stock = 'PETR3',data_ini = '19000101', data_fim = None, sen
     del df['ano'], df['mes'], df['dia']                                                                                         # Excluindo colunas desnecessarias
 
     # Plotando os graficos:
-    df.plot(x='data', y=['preco_ult'], kind='line',figsize=(12,10))                                                             # Configurando o grafico a ser plotado
-    ini = df['data'].iloc[0].strftime('%d/%m/%Y')                                                                               # Extraindo a data de inicio para legenda
-    fim = df['data'].tail(1).iloc[0].strftime('%d/%m/%Y')                                                                       # Extraindo a data de fim para legenda
-    titulo = f'Preco Medio da acao {stock} entre {ini} e {fim}'                                                                 # Setando o titulo do grafico a ser plotado
-    plt.title(titulo)                                                                                                           # Introduzindo o titulo setado
-    plt.xlabel(f'Data do Pregao da acao {stock}')                                                                               # Fornecendo a descricao do eixo x
-    plt.ylabel('Preco de Fechamento do Pregao')                                                                                 # Fornecendo a descricao do eixo y                                                
-    ini2 = df['data'].iloc[0].strftime('%d_%m_%Y')                                                                              # Retirando a barra para nomear arquivo
-    fim2 = df['data'].tail(1).iloc[0].strftime('%d_%m_%Y')                                                                      # Retirando a barra para nomear arquivo
-    plt.savefig(f'fig_files/{stock}_{ini2}_{fim2}.png')                                                                         # Salvando o arquivo .png no diretorio desejado
-    plt.show(block=False)
-    print('FIGURA SALVA!')
+    try:
+        df.plot(x='data', y=['preco_ult'], kind='line',figsize=(12,10))                                                         # Configurando o grafico a ser plotado
+        ini = df['data'].iloc[0].strftime('%d/%m/%Y')                                                                           # Extraindo a data de inicio para legenda
+        fim = df['data'].tail(1).iloc[0].strftime('%d/%m/%Y')                                                                   # Extraindo a data de fim para legenda
+        titulo = f'Preco de Fechamento do Pregao da acao {stock} entre {ini} e {fim}'                                           # Setando o titulo do grafico a ser plotado
+        plt.title(titulo)                                                                                                       # Introduzindo o titulo setado
+        plt.xlabel(f'Data do Pregao da acao {stock}')                                                                           # Fornecendo a descricao do eixo x
+        plt.ylabel('Preco de Fechamento do Pregao')                                                                             # Fornecendo a descricao do eixo y                                                
+        ini2 = df['data'].iloc[0].strftime('%d-%m-%Y')                                                                          # Retirando a barra para nomear arquivo
+        fim2 = df['data'].tail(1).iloc[0].strftime('%d-%m-%Y')                                                                  # Retirando a barra para nomear arquivo
+        plt.savefig(f'fig_files/{stock}_{ini2}_{fim2}.png')                                                                     # Salvando o arquivo .png no diretorio desejado
+        print(f'Figura de {stock} entre {ini2} e {fim2} salvo com sucesso!')                                                    # Aviso de sucesso pelo terminal
+        logging.info(f'Figura de {stock} entre {ini2} e {fim2} salvo com sucesso!')                                             # Aviso de sucesso via logging
+    except:
+        print(f'ERRO! FIGURA DE {stock} ENTRE {ini2} e {fim2} NAO FOI SALVA COM SUCESSO!')                                      # Aviso de sucesso pelo terminal
+        logging.error(f'ERRO! FIGURA DE {stock} ENTRE {ini2} e {fim2} NAO FOI SALVA COM SUCESSO!')                              # Aviso de sucesso via logging
 
-    # Salvando o dataframe como arquivo xlsx e csv para consulta via excel:
-    df.to_excel(f'xlsx_files/{stock}_{ini2}_{fim2}.xlsx', sheet_name=f'{stock}_{ini2}_{fim2}')                                  # Salvando o arquivo como xlsx para consulta excel
-    print('XLSX SALVO!')
-    df.to_csv(f'csv_files/{stock}_{ini2}_{fim2}.csv')                                                                           # Salvando o arquivo como csv para consulta csv
-    print('CSV SALVO!')
+    # Salvando o dataframe como arquivo xlsx para consulta via excel:
+    try:                                                                                                                        # Caso seja possivel salvar os dados em excel
+        df.to_excel(f'xlsx_files/{stock}_{ini2}_{fim2}.xlsx', sheet_name=f'{stock}_{ini2}_{fim2}')                              # Salvando o arquivo como xlsx para consulta excel
+        print(f'XLSX de {stock} entre {ini2} e {fim2} salvo com sucesso!')                                                      # Aviso de sucesso pelo terminal
+        logging.info(f'XLSX de {stock} entre {ini2} e {fim2} salvo com sucesso!')                                               # Aviso de sucesso via logging
+    except:                                                                                                                     # Caso nao seja possivel salvar o xlsx
+        print(f'ERRO! XLSX DE {stock} ENTRE {ini2} e {fim2} NAO FOI SALVO COM SUCESSO!')                                        # Aviso de sucesso pelo terminal
+        logging.error(f'ERRO! XLSX DE {stock} ENTRE {ini2} e {fim2} NAO FOI SALVO COM SUCESSO!')                                # Aviso de sucesso via logging
+
+    # Salvando o dataframe como arquivo csv para consulta via separacao por ponto e virgula:
+    try:                                                                                                                        # Caso seja possivel salvar os dados em excel
+        df.to_csv(f'csv_files/{stock}_{ini2}_{fim2}.csv')                                                                       # Salvando o arquivo como csv para consulta csv
+        print(f'CSV de {stock} entre {ini2} e {fim2} salvo com sucesso!')                                                       # Aviso de sucesso pelo terminal
+        logging.info(f'CSV de {stock} entre {ini2} e {fim2} salvo com sucesso!')                                                # Aviso de sucesso via logging
+    except:                                                                                                                     # Caso nao seja possivel salvar o xlsx
+        print(f'ERRO! CSV DE {stock} ENTRE {ini2} e {fim2} NAO FOI SALVO COM SUCESSO!')                                         # Aviso de sucesso pelo terminal
+        logging.error(f'ERRO! CSV DE {stock} ENTRE {ini2} e {fim2} NAO FOI SALVO COM SUCESSO!')                                 # Aviso de sucesso via logging
 
     # Enviando e-mail com os resultados conforme desejado:
     if send_email == True:
-        from redmail import gmail
-        gmail.username = sender_email
-        gmail.password = sender_email_password
-        # email = EmailSender(host="localhost", port=0)
-        # Configuracoes para envio de email:
-        gmail.send(
-            subject = f'Dados da acao {stock} desde {ini2} ate {fim}',
-            sender = sender_email,
-            receivers = receiver_email_list,
-            text = email_text,
-            html = """
-                <h1>
-                Prezados Sr. Pedro Alexandre,
 
-                Uma belissima noite,
+        try:
+            # Atribuindo os parametros de username e password para acessar o Gmail:
+            gmail.username = sender_email                                                                                       # Importando o email de sender 
+            gmail.password = sender_email_password                                                                              # Importando a senha do email de sender
+
+            # Configuracoes para envio de email através do Gmail:
+            gmail.send(                                                                                                         # Enviando atraves do Gmail
                 
-                Peco permissao para me apresentar.
-
-                Eu sou o BOTjao, um robozinho criado pelo nosso ilustrissimo Leonardo Travagini Delboni.
-
-                Fui desenvolvido em Python e a minha missao e, a partir de um input de uma acao da B3,
-                eu busco todos os dados disponiveis na internet, organizo, ploto o grafico,
-                salvo em xlsx e csv e envio para voces por email automaticamente.
-
-                Espero que goste de mim!
-
-                Feliz ano novo! :</h1>
-
-                {{ my_plot }}
-            """,
-            body_images={
-                'my_plot': f'fig_files/{stock}_{ini2}_{fim2}.png',
-            },
-            attachments = {
-                f'{stock}_{ini2}_{fim2}.xlsx': Path(f'xlsx_files/{stock}_{ini2}_{fim2}.xlsx'),
-                f'{stock}_{ini2}_{fim2}.csv': Path(f'csv_files/{stock}_{ini2}_{fim2}.csv'),
-                'raw_file.html': '<h1>Um feliz ano novo seus doidos!!!</h1>',
-            }
-        )
-        print('E-MAIL ENVIADO!')
+                # Configurando o envio de email:
+                subject = f'Dados da acao {stock} desde {ini} ate {fim}',                                                       # Titulo do email
+                sender = sender_email,                                                                                          # Sender email (remetente)
+                receivers = receiver_email_list,                                                                                # Lista dos emails recebedores (destinatarios)
+                # text = email_text,                                                                                             
+                html = email_text + """{{ my_plot }}""" + assinatura,                                                           # Corpo do e-mail em html
+                body_images={                                                                                                   # Imagens anexadas no corpo do e-mail
+                    'my_plot': f'fig_files/{stock}_{ini2}_{fim2}.png',
+                },
+                attachments = {                                                                                                 # Lista dos arquivos anexados ao e-mail
+                    f'{stock}_{ini2}_{fim2}.xlsx': Path(f'xlsx_files/{stock}_{ini2}_{fim2}.xlsx'),                              # Arquivo XLSX anexado ao e-mail
+                    f'{stock}_{ini2}_{fim2}.csv': Path(f'csv_files/{stock}_{ini2}_{fim2}.csv'),                                 # Arquivo CSV anexado ao e-mail
+                    f'fig_files/{stock}_{ini2}_{fim2}.png': Path(f'fig_files/{stock}_{ini2}_{fim2}.png'),                       # Arquivo de imagem anexado ao e-mail
+                    'raw_file.html': email_text + assinatura,                                                                   # Corpo do e-mail em html anexado ao proprio e-mail
+                }
+            )
+            print(f'Email de {stock}_{ini2}_{fim2} enviado com sucesso!')                                                       # Aviso de sucesso pelo terminal
+            logging.info(f'Email de {stock}_{ini2}_{fim2} enviado com sucesso!')                                                # Aviso de sucesso via logging
+        except:
+            print(f'ERRO! EMAIL DE {stock}_{ini2}_{fim2} NAO FOI ENVIADO!')                                                     # Aviso de sucesso pelo terminal
+            logging.info(f'Email de {stock}_{ini2}_{fim2} NAO FOI ENVIADO!')                                                    # Aviso de sucesso via logging
 
     # Retornando o dataframe final desejado:
     return df
