@@ -130,7 +130,6 @@ dmypy.json
 
 # Dados pessoais:
 config.py
-bot_telegram.py
 
 # Dados de csv e xlsx:
 *.xlsx
